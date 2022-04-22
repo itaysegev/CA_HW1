@@ -112,34 +112,33 @@ int calculate_fsm_update(int old_val, bool taken) {
 }
 
 //calculate the mask that using and find the relevant history out of the max size 
-int findHistorSizeMask(int history_size) {
+int findHistorSizeMask(unsigned history_size) {
 	int mask = 0;
 	switch (history_size) {
-		int mask = 0;
-	case 1:
-		mask = 1;
-		break;
-	case 2:
-		mask = 3;
-		break;
-	case 3:
-		mask = 7;
-		break;
-	case 4:
-		mask = 15;
-		break;
-	case 5:
-		mask = 31;
-		break;
-	case 6:
-		mask = 63;
-		break;
-	case 7:
-		mask = 127;
-		break;
-	case 8:
-		mask = 255;
-		break;
+		case 1:
+			mask = 1;
+			break;
+		case 2:
+			mask = 3;
+			break;
+		case 3:
+			mask = 7;
+			break;
+		case 4:
+			mask = 15;
+			break;
+		case 5:
+			mask = 31;
+			break;
+		case 6:
+			mask = 63;
+			break;
+		case 7:
+			mask = 127;
+			break;
+		case 8:
+			mask = 255;
+			break;
 	}
 	return mask;
 }
@@ -149,7 +148,6 @@ int findHistorSizeMask(int history_size) {
 void local_fsm_update(uint32_t curr_histroy, bool taken, int btb_index) {
 	int old_val = btb.btbTable[btb_index].fsm[curr_histroy];
 	(btb.btbTable[btb_index]).fsm[curr_histroy] = calculate_fsm_update(old_val,taken);
-	return;
 }
 
 //global fsm value update
@@ -163,17 +161,18 @@ void global_fsm_update(uint32_t curr_history, bool taken, uint32_t pc) {
 	int index = 0;
 	int mask = findHistorSizeMask(btb.historySize);
 	if (btb.Shared == 1){
-		index = ((pc >> 2) & mask) ^ curr_history;
+		pc = pc >> 2;
+		index = (pc & mask) ^ curr_history;
 		old_val = global_fsm[index];
 		global_fsm[index]= calculate_fsm_update( old_val,  taken);
 		return;
 	}
 	else if (btb.Shared == 2){
-		index = ((pc >> 16) & mask) ^ curr_history;
+		pc = pc >> 16;
+		index = (pc  & mask) ^ curr_history; /////
 		old_val = global_fsm[index];
 		global_fsm[index]= calculate_fsm_update(old_val, taken);
 	}
-	return;
 }
 
 // calculate the relevant history when knowing that the branch is in the TBT 
@@ -182,6 +181,7 @@ uint32_t findHistory(int btb_index) {
 	if (btb.isGlobalHist) {
 		return globalHistory & mask;
 	}
+	
 	return btb.btbTable[btb_index].localHistory & mask;
 }
 
@@ -234,15 +234,13 @@ void fsm_global(int btb_index, uint32_t pc, bool taken, uint32_t pred_dst) {
 		btb.btbTable[btb_index].localHistory= history_update(curr_history, taken);
 	}
 	global_fsm_update(curr_history, taken, pc);
-	
 }
 
 
 
 
 //Reading the local FSM in the not sharing case
-bool is_taken(int state) 
-{
+bool is_taken(int state) {
 	return state >= 2;
 }
 
@@ -269,12 +267,12 @@ bool isTakenGlobal (uint32_t curr_history, uint32_t pc) {
 BP_predict_global(int btb_index, uint32_t pc, uint32_t *dst, uint32_t curr_history) {
 	if (isTakenGlobal(curr_history,pc)) {
 		*dst = btb.btbTable[btb_index].target; 
-			return true;
+		return true;
 		}
-		else {
-			*dst= pc+ 4;
-			return false;
-		}
+	else {
+		*dst= pc+ 4;
+		return false;
+	}
 
 }
 
@@ -285,8 +283,8 @@ bool BP_predict_local(int btb_index, uint32_t pc,uint32_t *dst, uint32_t curr_hi
 		return true;
 	}
 	else {
-	*dst= pc+ 4;
-	return false;
+		*dst= pc+ 4;
+		return false;
 	}
 }
 
@@ -301,6 +299,7 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
 	}
 	//the branch is indeed in the BTB
 	uint32_t curr_history =  findHistory(btb_index);
+	//printf("%p\n", curr_history);
 	if (btb.isGlobalTable) {
 		return BP_predict_global(btb_index, pc, dst, curr_history);
 	}
@@ -310,14 +309,11 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
 
 void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 	btb.br_num++;
-	if (targetPc != pred_dst) {
+	if (((targetPc != pred_dst) && (taken)) || ((!taken) && (pred_dst != pc + 4))) {
 		btb.flush_num++;
 	}
 	int btb_index = btb_index_calc(pc);
 	uint32_t tag = tag_calc(pc);
-	// if(!btb.btbTable[btb_index]) {
-	// 	struct Line* new_line = (struct Line*) malloc(sizeof(struct Line));
-	// }
 	if(btb.btbTable[btb_index].tag != tag) { //new line in the BTB
 		btb.btbTable[btb_index].tag = tag;
 		if (!btb.isGlobalHist) { //only initialize in case of local history
@@ -337,7 +333,6 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 	else {
 		fsm_local(btb_index, pc, taken, pred_dst);
 	}
-	return;
 }
 
 void BP_GetStats(SIM_stats *curStats){
@@ -345,17 +340,23 @@ void BP_GetStats(SIM_stats *curStats){
 	curStats->flush_num = btb.flush_num;
 	int size = 0;
 	//adding the BTB table
-	size+= btb.btbSize*(btb.tagSize+32);
+	size += btb.btbSize*(btb.tagSize + 30);
 	//adding the history 
-	if(btb.isGlobalHist) size+= btb.historySize;
-	else size+= btb.historySize*btb.btbSize;
+	if(btb.isGlobalHist) {
+		size += btb.historySize;
+	}
+	else {
+		size+= btb.historySize * btb.btbSize;
+	}
 	//adding the FSM
-	if(btb.isGlobalTable)
-	size+= (int)pow(2,btb.historySize+1);
-	else size+= pow(2,btb.historySize+1)*btb.btbSize;
+	if(btb.isGlobalTable) {
+		size += (int)pow(2,btb.historySize+1);
+	}
+	else {
+		size += pow(2,btb.historySize+1)*btb.btbSize;
+	}
 	//adding the valis bits-: isGLobalHist(1), isGlobalTable(1), FSMstate(2)+ historySize(2)+ tagsize(5) + shared(2)+ btbSize(5)
-	size+=18;
+	size += btb.btbSize; ///////
 	curStats->size= size;
-	return;
 }
 
