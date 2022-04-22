@@ -4,6 +4,7 @@
 #include "bp_api.h"
 #include <stdio.h>
 #include <math.h>
+#include <stdlib.h>
 
 #define MAX_BTB_SIZE 32
 #define MAX_HISTORY_SIZE 8
@@ -19,17 +20,17 @@ struct BTB {
 	bool isGlobalHist;
 	bool isGlobalTable;
 	int Shared;
-	struct Line* btbTable[MAX_BTB_SIZE];
+	Line btbTable[MAX_BTB_SIZE];
 	unsigned flush_num;          
 	unsigned br_num;      	    	
 };
 // each line has array of fsm, localhistory is the index of it.
-struct Line {
+typedef struct Line {
 	uint32_t target;
 	uint32_t tag;
 	uint32_t localHistory;
 	int fsm[FSM_MAX_SIZE];
-};
+}Line;
 
 //globals var, globalHistory and global fsm are in use only if isGlobalHist or isGlobalTable.
 struct BTB btb;
@@ -145,8 +146,8 @@ int findHistorSizeMask(int history_size) {
 
 // local fsm value update, max value is 3 and min value is 0.
 void local_fsm_update(uint32_t curr_histroy, bool taken, int btb_index) {
-	int old_val = btb.btbTable[btb_index]->fsm[curr_histroy];
-	btb.btbTable[btb_index]->fsm[curr_histroy] = calculate_fsm_update(old_val,taken);
+	int old_val = btb.btbTable[btb_index].fsm[curr_histroy];
+	btb.btbTable[btb_index].fsm[curr_histroy] = calculate_fsm_update(old_val,taken);
 	return;
 }
 
@@ -180,7 +181,7 @@ uint32_t findHistory(int btb_index) {
 	if (btb.isGlobalHist) {
 		return globalHistory & mask;
 	}
-	return btb.btbTable[btb_index]->localHistory & mask;
+	return btb.btbTable[btb_index].localHistory & mask;
 }
 
 //global history update
@@ -217,7 +218,7 @@ void fsm_local(int btb_index, uint32_t pc, bool taken, uint32_t pred_dst) {
 		globalHistory = history_update(taken, curr_history);
 	}
 	else {
-		btb.btbTable[btb_index]->localHistory = history_update(taken, curr_history);
+		btb.btbTable[btb_index].localHistory = history_update(taken, curr_history);
 
 	}
 	local_fsm_update(curr_history,taken,btb_index);
@@ -229,7 +230,7 @@ void fsm_global(int btb_index, uint32_t pc, bool taken, uint32_t pred_dst) {
 		globalHistory =history_update(curr_history,taken);
 	}
 	else {
-		btb.btbTable[btb_index]->localHistory= history_update(curr_history, taken);
+		btb.btbTable[btb_index].localHistory= history_update(curr_history, taken);
 	}
 	global_fsm_update(curr_history, taken, pc);
 	
@@ -266,7 +267,7 @@ bool isTakenGlobal (uint32_t curr_history, uint32_t pc) {
 // BP_predict for global FSM
 BP_predict_global(int btb_index, uint32_t pc, uint32_t *dst, uint32_t curr_history) {
 	if (isTakenGlobal(curr_history,pc)) {
-		*dst = btb.btbTable[btb_index]->target; 
+		*dst = btb.btbTable[btb_index].target; 
 			return true;
 		}
 		else {
@@ -278,8 +279,8 @@ BP_predict_global(int btb_index, uint32_t pc, uint32_t *dst, uint32_t curr_histo
 
 // BP_predict for local FSM
 bool BP_predict_local(int btb_index, uint32_t pc,uint32_t *dst, uint32_t curr_history) {
-	if (is_taken(btb.btbTable[btb_index]->fsm[curr_history])) { 
-		*dst = btb.btbTable[btb_index]->target; 
+	if (is_taken(btb.btbTable[btb_index].fsm[curr_history])) { 
+		*dst = btb.btbTable[btb_index].target; 
 		return true;
 	}
 	else {
@@ -293,12 +294,12 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
 	int btb_index = btb_index_calc(pc);
 	uint32_t tag = tag_calc(pc);
 	//checks if the branch in the BTB
-	if(btb.btbTable[btb_index]->tag != tag) {
+	if(btb.btbTable[btb_index].tag != tag) {
 		*dst= pc+ 4;
 		return false;
 	}
 	//the branch is indeed in the BTB
-	uint32_t curr_history =  findHistory(btb_index) ;
+	uint32_t curr_history =  findHistory(btb_index);
 	if (btb.isGlobalTable) {
 		return BP_predict_global(btb_index, pc, dst, curr_history);
 	}
@@ -308,22 +309,27 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
 
 void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 	btb.br_num++;
-	if (targetPc != pred_dst) btb.flush_num++;
+	if (targetPc != pred_dst) {
+		btb.flush_num++;
+	}
 	int btb_index = btb_index_calc(pc);
 	uint32_t tag = tag_calc(pc);
-	if(btb.btbTable[btb_index]->tag != tag){ //new line in the BTB
-		btb.btbTable[btb_index]->tag = tag;
+	// if(!btb.btbTable[btb_index]) {
+	// 	struct Line* new_line = (struct Line*) malloc(sizeof(struct Line));
+	// }
+	if(btb.btbTable[btb_index].tag != tag) { //new line in the BTB
+		btb.btbTable[btb_index].tag = tag;
 		if (!btb.isGlobalHist) { //only initialize in case of local history
-			btb.btbTable[btb_index]->localHistory = 0; // initialize history
+			btb.btbTable[btb_index].localHistory = 0; // initialize history
 		}
 		if (!btb.isGlobalTable) { // only initialize in case of local table
 			for (int i = 0; i < FSM_MAX_SIZE; i++) { // initialize fsm
-				btb.btbTable[btb_index]->fsm[i] = btb.fsmState;
+				btb.btbTable[btb_index].fsm[i] = btb.fsmState;
 			}
 		}
 	}
 	// here we have an entry for the branch in the BRB
-	btb.btbTable[btb_index]->target = targetPc;
+	btb.btbTable[btb_index].target = targetPc;
 	if(btb.isGlobalTable) {
 		fsm_global(btb_index, pc, taken, pred_dst);
 	}
