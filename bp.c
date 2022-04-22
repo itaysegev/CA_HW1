@@ -12,6 +12,14 @@
 #define FSM_MAX_SIZE 256
 
 // Main data struct which saves arguments and the btb table = array of lines.
+
+struct Line {
+	uint32_t target;
+	uint32_t tag;
+	uint32_t localHistory;
+	int fsm[FSM_MAX_SIZE];
+};
+typedef struct Line Line;
 struct BTB {
 	unsigned btbSize;
 	unsigned historySize;
@@ -24,13 +32,6 @@ struct BTB {
 	unsigned flush_num;          
 	unsigned br_num;      	    	
 };
-// each line has array of fsm, localhistory is the index of it.
-typedef struct Line {
-	uint32_t target;
-	uint32_t tag;
-	uint32_t localHistory;
-	int fsm[FSM_MAX_SIZE];
-}Line;
 
 //globals var, globalHistory and global fsm are in use only if isGlobalHist or isGlobalTable.
 struct BTB btb;
@@ -147,7 +148,7 @@ int findHistorSizeMask(int history_size) {
 // local fsm value update, max value is 3 and min value is 0.
 void local_fsm_update(uint32_t curr_histroy, bool taken, int btb_index) {
 	int old_val = btb.btbTable[btb_index].fsm[curr_histroy];
-	btb.btbTable[btb_index].fsm[curr_histroy] = calculate_fsm_update(old_val,taken);
+	(btb.btbTable[btb_index]).fsm[curr_histroy] = calculate_fsm_update(old_val,taken);
 	return;
 }
 
