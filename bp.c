@@ -162,14 +162,16 @@ void global_fsm_update(uint32_t curr_history, bool taken, uint32_t pc) {
 	int mask = findHistorSizeMask(btb.historySize);
 	if (btb.Shared == 1){
 		pc = pc >> 2;
-		index = (pc & mask) ^ curr_history;
+		//index = (pc & mask) ^ curr_history;
+		index = (curr_history ^ pc) & mask; 
 		old_val = global_fsm[index];
 		global_fsm[index]= calculate_fsm_update( old_val,  taken);
 		return;
 	}
 	else if (btb.Shared == 2){
 		pc = pc >> 16;
-		index = (pc  & mask) ^ curr_history; /////
+		//index = (pc  & mask) ^ curr_history; /////
+		index = (curr_history ^ pc) & mask;
 		old_val = global_fsm[index];
 		global_fsm[index]= calculate_fsm_update(old_val, taken);
 	}
@@ -252,13 +254,16 @@ bool isTakenGlobal (uint32_t curr_history, uint32_t pc) {
 	int index = 0;
 	int mask = findHistorSizeMask(btb.historySize);
 	if (btb.Shared == 1){
-		index = ((pc >> 2) & mask) ^ curr_history ;
+		pc = pc >> 2;
+		index = (curr_history ^ pc) & mask;
+		//index = ((pc >> 2) & mask) ^ curr_history ;
 		return is_taken(global_fsm[index]);
 	}
-
-	index = ((pc >> 16) & mask) ^ curr_history ;
+	pc = pc >> 16;
+	index = (curr_history ^ pc) & mask;
+	//index = ((pc >> 16) & mask) ^ curr_history ;
 	return is_taken(global_fsm[index]);
-	}
+}
 
 
 
