@@ -186,7 +186,7 @@ uint32_t findHistory(int btb_index) {
 }
 
 //global history update
-uint32_t history_update(bool taken, uint32_t curr_hist){
+uint32_t history_update(uint32_t curr_hist, bool taken){
 	curr_hist = curr_hist << 1;
 	if (taken) {
 		curr_hist= curr_hist | 1;
