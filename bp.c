@@ -299,7 +299,6 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
 	}
 	//the branch is indeed in the BTB
 	uint32_t curr_history =  findHistory(btb_index);
-	//printf("%p\n", curr_history);
 	if (btb.isGlobalTable) {
 		return BP_predict_global(btb_index, pc, dst, curr_history);
 	}
