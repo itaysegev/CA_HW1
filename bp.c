@@ -177,21 +177,21 @@ void global_fsm_update(uint32_t curr_history, bool taken, uint32_t pc) {
 
 // calculate the relevant history when knowing that the branch is in the TBT 
 uint32_t findHistory(int btb_index) {
-	int mask = findHistorSizeMask(btb.historySize);
 	if (btb.isGlobalHist) {
-		return globalHistory & mask;
+		return globalHistory;
 	}
 	
-	return btb.btbTable[btb_index].localHistory & mask;
+	return btb.btbTable[btb_index].localHistory;
 }
 
 //global history update
 uint32_t history_update(uint32_t curr_hist, bool taken){
-	curr_hist = curr_hist << 1;
+	uint32_t tmp = curr_hist;
+	tmp = tmp << 1;
 	if (taken) {
-		curr_hist= curr_hist | 1;
+		tmp = tmp | 1;
 	}
-	return curr_hist & findHistorSizeMask(btb.historySize) ;
+	return tmp & findHistorSizeMask(btb.historySize) ;
 }
 
 int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
@@ -215,25 +215,25 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
  // BP_update for local fsm
 void fsm_local(int btb_index, uint32_t pc, bool taken, uint32_t pred_dst) {
 	uint32_t curr_history = findHistory(btb_index); // find history for both local and global cases
+	local_fsm_update(curr_history, taken, btb_index);
 	if(btb.isGlobalHist) {
-		globalHistory = history_update(taken, curr_history);
+		globalHistory = history_update(curr_history ,taken);
 	}
 	else {
 		btb.btbTable[btb_index].localHistory = history_update(taken, curr_history);
 
 	}
-	local_fsm_update(curr_history,taken,btb_index);
 }
 // BP_update for global fsm
 void fsm_global(int btb_index, uint32_t pc, bool taken, uint32_t pred_dst) {
 	int32_t curr_history = findHistory(btb_index); // find history for both local and global cases
+	global_fsm_update(curr_history, taken, pc);
 	if(btb.isGlobalHist) {
 		globalHistory =history_update(curr_history,taken);
 	}
 	else {
 		btb.btbTable[btb_index].localHistory= history_update(curr_history, taken);
 	}
-	global_fsm_update(curr_history, taken, pc);
 }
 
 
@@ -264,7 +264,7 @@ bool isTakenGlobal (uint32_t curr_history, uint32_t pc) {
 
 
 // BP_predict for global FSM
-BP_predict_global(int btb_index, uint32_t pc, uint32_t *dst, uint32_t curr_history) {
+bool BP_predict_global(int btb_index, uint32_t pc, uint32_t *dst, uint32_t curr_history) {
 	if (isTakenGlobal(curr_history,pc)) {
 		*dst = btb.btbTable[btb_index].target; 
 		return true;
@@ -278,7 +278,7 @@ BP_predict_global(int btb_index, uint32_t pc, uint32_t *dst, uint32_t curr_histo
 
 // BP_predict for local FSM
 bool BP_predict_local(int btb_index, uint32_t pc,uint32_t *dst, uint32_t curr_history) {
-	if (is_taken(btb.btbTable[btb_index].fsm[curr_history])) { 
+	if (is_taken(btb.btbTable[btb_index].fsm[curr_history])) {
 		*dst = btb.btbTable[btb_index].target; 
 		return true;
 	}
